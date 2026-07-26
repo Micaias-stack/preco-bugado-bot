@@ -1,7 +1,7 @@
 import requests
 
-TOKEN = "SEU_TOKEN_AQUI"  # @BotFather no Telegram
-CHAT_ID = "SEU_CHAT_ID"   # Use @userinfobot pra descobrir
+TOKEN = "8865880038:AAH8kDlBQ7vB5ZKj9x5X8bxDJWwMfU70MUk"  # @BotFather no Telegram
+CHAT_ID = "5679754900"   # Use @userinfobot pra descobrir
 
 def enviar_alerta(produto):
     """Envia mensagem formatada no Telegram"""
