@@ -1,35 +1,46 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
+import requests
+from bs4 import BeautifulSoup
 import pandas as pd
-import time
+import random
 
 def buscar_produtos(termo):
-    """Varre Mercado Livre em busca do termo"""
-    url = f"https://lista.mercadolivre.com.br/{termo}"
+    """Coleta produtos do Mercado Livre via requests"""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
     
-    driver = webdriver.Chrome()
-    driver.get(url)
-    time.sleep(3)
+    url = f"https://lista.mercadolivre.com.br/{termo.replace(' ', '-')}"
     
-    produtos = []
-    items = driver.find_elements(By.CLASS_NAME, "ui-search-result__content")
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        produtos = []
+        items = soup.find_all('li', class_='ui-search-layout__item')[:15]
+        
+        for item in items:
+            try:
+                nome_elem = item.find('h2', class_='ui-search-item__title')
+                preco_elem = item.find('span', class_='andes-money-amount__fraction')
+                link_elem = item.find('a', class_='ui-search-link')
+                
+                if nome_elem and preco_elem and link_elem:
+                    nome = nome_elem.text.strip()
+                    preco_texto = preco_elem.text.replace('.', '').replace(',', '.')
+                    preco = float(preco_texto)
+                    link = link_elem['href'].split('?')[0]  # Remove parâmetros
+                    
+                    produtos.append({
+                        'nome': nome,
+                        'preco': preco,
+                        'link': link,
+                        'timestamp': pd.Timestamp.now()
+                    })
+            except Exception as e:
+                continue
+        
+        return pd.DataFrame(produtos)
     
-    for item in items[:20]:  # Limita a 20 produtos
-        try:
-            nome = item.find_element(By.CLASS_NAME, "ui-search-item__title").text
-            preco_texto = item.find_element(By.CLASS_NAME, "andes-money-amount__fraction").text
-            link = item.find_element(By.TAG_NAME, "a").get_attribute("href")
-            
-            preco = float(preco_texto.replace(".", "").replace(",", "."))
-            
-            produtos.append({
-                "nome": nome,
-                "preco": preco,
-                "link": link,
-                "timestamp": pd.Timestamp.now()
-            })
-        except:
-            continue
-    
-    driver.quit()
-    return pd.DataFrame(produtos)
+    except Exception as e:
+        print(f"Erro ao buscar: {e}")
+        return pd.DataFrame()
