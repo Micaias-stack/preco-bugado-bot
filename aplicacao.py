@@ -8,149 +8,175 @@ from raspador import buscar_em_todas_plataformas
 from detector import detectar_bugs, salvar_historico, inicializar_bd
 from notificador import enviar_alerta
 
-# Configuração da página
 st.set_page_config(
     page_title="🔥 Caçador de Preços",
     page_icon="🔥",
     layout="wide"
 )
 
-# Inicializa banco
 db_path = inicializar_bd()
 
-# Estado do bot automático
 if 'bot_ativo' not in st.session_state:
     st.session_state.bot_ativo = False
 if 'ultima_busca' not in st.session_state:
     st.session_state.ultima_busca = None
 
-def executar_busca_automatica(termo, intervalo_minutos, desconto_minimo):
-    """Função que roda em loop no background"""
+def executar_busca_automatica(termo, intervalo, desconto_minimo):
     while st.session_state.bot_ativo:
         try:
-            st.session_state.ultima_busca = datetime.now().strftime('%H:%M:%S')
-            
-            # Busca produtos
+            st.session_state.ultima_busca = datetime.now().strftime('%d/%m %H:%M')
             df = buscar_em_todas_plataformas(termo)
             
             if not df.empty:
                 salvar_historico(df, db_path)
                 bugs = detectar_bugs(df, db_path, limite=desconto_minimo)
                 
-                # Envia alertas
                 for _, bug in bugs.iterrows():
                     enviar_alerta(bug)
                     time.sleep(2)
             
-            # Aguarda próximo ciclo
-            time.sleep(intervalo_minutos * 60)
-        
-        except Exception as e:
-            print(f"Erro no bot: {e}")
+            time.sleep(intervalo * 60)
+        except:
             time.sleep(60)
 
-# Interface
 st.title("🔥 Caçador de Preços Bugados")
-st.caption("Mercado Livre • Shopee • Automático 24/7")
+st.caption("Mercado Livre • Shopee • Monitoramento 24/7")
 
-# Tabs
 tab1, tab2, tab3 = st.tabs(["🤖 Bot Automático", "🔍 Busca Manual", "📊 Histórico"])
 
-# TAB 1: BOT AUTOMÁTICO
 with tab1:
-    st.subheader("🤖 Monitoramento Automático")
+    st.subheader("⚙️ Configurar Bot Automático")
     
-    col1, col2, col3 = st.columns(3)
-    
+    col1, col2 = st.columns(2)
     with col1:
-        termo_auto = st.text_input("Produto a monitorar", "iphone 15", key="termo_auto")
-    
+        termo_auto = st.text_input("🔎 Produto para monitorar", "iphone 15", key="termo_auto")
+        intervalo = st.number_input("⏰ Buscar a cada (minutos)", 15, 180, 30)
     with col2:
-        intervalo = st.number_input("Intervalo (minutos)", 10, 120, 30)
-    
-    with col3:
-        desconto_auto = st.number_input("Desconto mín (%)", 20, 90, 40, key="desc_auto")
+        desconto_auto = st.number_input("📉 Desconto mínimo (%)", 20, 90, 40, key="desc_auto")
+        st.write("")
+        st.write("")
     
     col_btn1, col_btn2 = st.columns(2)
     
     with col_btn1:
-        if st.button("🚀 Iniciar Bot", type="primary", disabled=st.session_state.bot_ativo):
-            st.session_state.bot_ativo = True
-            threading.Thread(
-                target=executar_busca_automatica,
-                args=(termo_auto, intervalo, desconto_auto),
-                daemon=True
-            ).start()
-            st.success("✅ Bot iniciado!")
-            st.rerun()
+        if not st.session_state.bot_ativo:
+            if st.button("🚀 INICIAR BOT", type="primary", use_container_width=True):
+                st.session_state.bot_ativo = True
+                thread = threading.Thread(
+                    target=executar_busca_automatica,
+                    args=(termo_auto, intervalo, desconto_auto),
+                    daemon=True
+                )
+                thread.start()
+                st.success("✅ Bot iniciado!")
+                st.rerun()
     
     with col_btn2:
-        if st.button("🛑 Parar Bot", disabled=not st.session_state.bot_ativo):
-            st.session_state.bot_ativo = False
-            st.warning("⏸️ Bot parado")
-            st.rerun()
+        if st.session_state.bot_ativo:
+            if st.button("🛑 PARAR BOT", type="secondary", use_container_width=True):
+                st.session_state.bot_ativo = False
+                st.warning("⏸️ Bot pausado")
+                st.rerun()
     
-    # Status
     if st.session_state.bot_ativo:
-        st.success(f"🟢 **Bot ATIVO** | Última busca: {st.session_state.ultima_busca or 'Aguardando...'}")
-        st.info(f"🔄 Próxima busca em ~{intervalo} minutos")
+        st.success(f"✅ Bot rodando • Última busca: {st.session_state.ultima_busca or 'Aguardando...'}")
+        st.info(f"🔄 Próxima busca em {intervalo} minutos • Buscando: **{termo_auto}**")
     else:
-        st.error("🔴 **Bot INATIVO**")
+        st.info("⏸️ Bot pausado • Clique em INICIAR para ativar")
 
-# TAB 2: BUSCA MANUAL
 with tab2:
     st.subheader("🔍 Busca Manual")
     
-    col1, col2 = st.columns([2, 1])
-    
+    col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        termo_manual = st.text_input("O que procura?", "notebook gamer")
-    
+        termo_manual = st.text_input("🔎 Buscar produto", "notebook gamer", key="termo_manual")
     with col2:
-        desconto_manual = st.number_input("Desconto mín (%)", 20, 90, 40)
+        desconto_manual = st.number_input("📉 Desconto mínimo", 20, 90, 40, key="desc_manual")
+    with col3:
+        st.write("")
+        buscar_btn = st.button("🕷️ BUSCAR AGORA", type="primary", use_container_width=True)
     
-    if st.button("🕷️ Buscar Agora", type="primary"):
-        with st.spinner("Varrendo..."):
+    if buscar_btn:
+        with st.spinner("🔍 Vasculhando todas as plataformas..."):
             df = buscar_em_todas_plataformas(termo_manual)
             
             if df.empty:
-                st.warning("Nenhum produto encontrado")
+                st.error("❌ Nenhum produto encontrado")
             else:
+                st.success(f"✅ {len(df)} produtos encontrados")
                 salvar_historico(df, db_path)
+                
                 bugs = detectar_bugs(df, db_path, limite=desconto_manual)
                 
-                if not bugs.empty:
-                    st.success(f"🎯 **{len(bugs)} bugs encontrados!**")
-                    
-                    for idx, bug in bugs.iterrows():
-                        with st.expander(f"💥 {bug['nome'][:60]}..."):
-                            col1, col2, col3 = st.columns(3)
-                            col1.metric("Preço", f"R$ {bug['preco']:.2f}")
-                            col2.metric("Média", f"R$ {bug['preco_medio']:.2f}")
-                            col3.metric("Desconto", f"{bug['desconto']}%")
-                            
-                            st.markdown(f"**{bug['plataforma']}**")
-                            st.link_button("🛒 Comprar", bug['link'])
-                            
-                            if st.button("📱 Enviar Telegram", key=f"btn_{idx}"):
-                                resultado = enviar_alerta(bug)
-                                if resultado and resultado.get("ok"):
-                                    st.success("✅ Enviado!")
+                if bugs.empty:
+                    st.warning("⚠️ Nenhum bug detectado nesta busca")
+                    with st.expander("📦 Ver todos os produtos"):
+                        st.dataframe(df, use_container_width=True)
                 else:
-                    st.info("Nenhum bug detectado")
+                    st.error(f"🚨 {len(bugs)} PREÇOS BUGADOS ENCONTRADOS!")
+                    
+                    for _, bug in bugs.iterrows():
+                        with st.container():
+                            col_info, col_btn = st.columns([4, 1])
+                            
+                            with col_info:
+                                st.markdown(f"### {bug['plataforma']} {bug['nome'][:60]}...")
+                                col_preco1, col_preco2, col_desc = st.columns(3)
+                                col_preco1.metric("💰 Preço Atual", f"R$ {bug['preco']:.2f}")
+                                col_preco2.metric("📊 Preço Médio", f"R$ {bug['preco_medio']:.2f}")
+                                col_desc.metric("📉 Desconto", f"{bug['desconto']}%", delta=f"-{bug['desconto']}%")
+                            
+                            with col_btn:
+                                st.write("")
+                                st.write("")
+                                if st.button("📱 Enviar", key=f"enviar_{bug['link'][:20]}"):
+                                    resultado = enviar_alerta(bug)
+                                    if resultado and resultado.get("ok"):
+                                        st.success("✅ Enviado!")
+                                    else:
+                                        st.error("❌ Erro")
+                                
+                                st.link_button("🔗 Ver", bug['link'])
+                            
+                            st.divider()
 
-# TAB 3: HISTÓRICO
 with tab3:
-    st.subheader("📊 Produtos Monitorados")
+    st.subheader("📊 Histórico de Preços")
     
     try:
         conn = sqlite3.connect(db_path)
-        historico = pd.read_sql("SELECT * FROM produtos ORDER BY timestamp DESC LIMIT 100", conn)
+        historico = pd.read_sql(
+            "SELECT * FROM produtos ORDER BY timestamp DESC LIMIT 100",
+            conn
+        )
         conn.close()
         
-        if not historico.empty:
-            st.dataframe(historico, use_container_width=True)
+        if historico.empty:
+            st.info("📭 Nenhum histórico ainda. Faça uma busca primeiro!")
         else:
-            st.info("Nenhum produto no histórico")
+            col_filtro1, col_filtro2 = st.columns(2)
+            with col_filtro1:
+                plataforma_filtro = st.multiselect(
+                    "🏪 Filtrar por plataforma",
+                    historico['plataforma'].unique(),
+                    default=historico['plataforma'].unique()
+                )
+            with col_filtro2:
+                limite_preco = st.slider("💰 Preço máximo", 0, int(historico['preco'].max()), int(historico['preco'].max()))
+            
+            historico_filtrado = historico[
+                (historico['plataforma'].isin(plataforma_filtro)) &
+                (historico['preco'] <= limite_preco)
+            ]
+            
+            st.metric("📦 Total de produtos", len(historico_filtrado))
+            st.dataframe(
+                historico_filtrado[['nome', 'preco', 'plataforma', 'timestamp']],
+                use_container_width=True,
+                hide_index=True
+            )
     except:
-        st.info("Histórico vazio")
+        st.info("📭 Banco vazio")
+
+st.divider()
+st.caption("💡 Dica: Deixe o bot rodando na aba 'Bot Automático' e receberá alertas no Telegram automaticamente")
